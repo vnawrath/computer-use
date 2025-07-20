@@ -36,7 +36,7 @@ echo "[entrypoint] Starting x11vnc (fixed size: disabling RandR)"
 x11vnc -display "${DISPLAY}" \
   -forever -shared -rfbport ${VNC_PORT} \
   -noxdamage -noxfixes -noxrecord -noxrandr \
-  -passwdfile /dev/null ${PASS_OPTS} \
+  ${PASS_OPTS} \
   -bg -o /tmp/x11vnc.log
 
 echo "[entrypoint] Starting noVNC on port ${NO_VNC_PORT}"
