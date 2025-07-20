@@ -112,13 +112,19 @@ def bash_command():
     try:
         data = request.json
         command = data.get("command", "")
+        pwd = data.get("pwd", None)  # Optional working directory
 
         if not command:
             return jsonify({"error": "Missing 'command' parameter"}), 400
 
         # Execute command safely
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True, timeout=30
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=pwd,  # Use provided working directory
         )
 
         return jsonify(
@@ -131,6 +137,8 @@ def bash_command():
 
     except subprocess.TimeoutExpired:
         return jsonify({"error": "Command timed out"}), 408
+    except FileNotFoundError as e:
+        return jsonify({"error": f"Working directory not found: {pwd}"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -142,16 +150,17 @@ def text_editor():
         data = request.json
         command = data.get("command", "")
         path = data.get("path", "")
+        pwd = data.get("pwd", None)  # Optional working directory
 
         if command == "view":
-            return handle_view_file(path)
+            return handle_view_file(path, pwd)
         elif command == "create":
             file_text = data.get("file_text", "")
-            return handle_create_file(path, file_text)
+            return handle_create_file(path, file_text, pwd)
         elif command == "str_replace":
             old_str = data.get("old_str", "")
             new_str = data.get("new_str", "")
-            return handle_str_replace(path, old_str, new_str)
+            return handle_str_replace(path, old_str, new_str, pwd)
         else:
             return jsonify({"error": f"Unknown text editor command: {command}"}), 400
 
@@ -274,31 +283,41 @@ def handle_wait(duration):
 
 
 # Text editor handlers
-def handle_view_file(path):
+def _resolve_path(path, pwd=None):
+    """Resolve path relative to pwd if provided and path is relative"""
+    if pwd is not None and not os.path.isabs(path):
+        return os.path.join(pwd, path)
+    return path
+
+
+def handle_view_file(path, pwd=None):
     """View file contents"""
     try:
-        with open(path, "r") as f:
+        resolved_path = _resolve_path(path, pwd)
+        with open(resolved_path, "r") as f:
             content = f.read()
         return jsonify({"content": content})
     except FileNotFoundError:
-        return jsonify({"error": f"File not found: {path}"}), 404
+        return jsonify({"error": f"File not found: {resolved_path}"}), 404
 
 
-def handle_create_file(path, content):
+def handle_create_file(path, content, pwd=None):
     """Create file with content"""
     try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
+        resolved_path = _resolve_path(path, pwd)
+        os.makedirs(os.path.dirname(resolved_path), exist_ok=True)
+        with open(resolved_path, "w") as f:
             f.write(content)
-        return jsonify({"result": f"Created file: {path}"})
+        return jsonify({"result": f"Created file: {resolved_path}"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-def handle_str_replace(path, old_str, new_str):
+def handle_str_replace(path, old_str, new_str, pwd):
     """Replace string in file"""
     try:
-        with open(path, "r") as f:
+        resolved_path = _resolve_path(path, pwd)
+        with open(resolved_path, "r") as f:
             content = f.read()
 
         if old_str not in content:
@@ -306,12 +325,12 @@ def handle_str_replace(path, old_str, new_str):
 
         new_content = content.replace(old_str, new_str)
 
-        with open(path, "w") as f:
+        with open(resolved_path, "w") as f:
             f.write(new_content)
 
         return jsonify({"result": f"Replaced '{old_str}' with '{new_str}' in {path}"})
     except FileNotFoundError:
-        return jsonify({"error": f"File not found: {path}"}), 404
+        return jsonify({"error": f"File not found: {resolved_path}"}), 404
 
 
 if __name__ == "__main__":

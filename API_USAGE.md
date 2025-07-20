@@ -101,6 +101,13 @@ curl -X POST http://localhost:5000/bash \
   -d '{"command": "ls -la"}'
 ```
 
+### With Working Directory
+```bash
+curl -X POST http://localhost:5000/bash \
+  -H "Content-Type: application/json" \
+  -d '{"command": "ls -la", "pwd": "/home/appuser/documents"}'
+```
+
 ## Text Editor Operations
 
 ### View File
@@ -110,6 +117,13 @@ curl -X POST http://localhost:5000/text_editor \
   -d '{"command": "view", "path": "/home/appuser/example.txt"}'
 ```
 
+### View File with Working Directory (for relative paths)
+```bash
+curl -X POST http://localhost:5000/text_editor \
+  -H "Content-Type: application/json" \
+  -d '{"command": "view", "path": "example.txt", "pwd": "/home/appuser"}'
+```
+
 ### Create File
 ```bash
 curl -X POST http://localhost:5000/text_editor \
@@ -117,11 +131,51 @@ curl -X POST http://localhost:5000/text_editor \
   -d '{"command": "create", "path": "/home/appuser/example.txt", "file_text": "Hello World!"}'
 ```
 
+### Create File with Working Directory
+```bash
+curl -X POST http://localhost:5000/text_editor \
+  -H "Content-Type: application/json" \
+  -d '{"command": "create", "path": "example.txt", "pwd": "/home/appuser", "file_text": "Hello World!"}'
+```
+
 ### Replace Text in File
 ```bash
 curl -X POST http://localhost:5000/text_editor \
   -H "Content-Type: application/json" \
   -d '{"command": "str_replace", "path": "/home/appuser/example.txt", "old_str": "Hello", "new_str": "Hi"}'
+```
+
+### Replace Text with Working Directory
+```bash
+curl -X POST http://localhost:5000/text_editor \
+  -H "Content-Type: application/json" \
+  -d '{"command": "str_replace", "path": "example.txt", "pwd": "/home/appuser", "old_str": "Hello", "new_str": "Hi"}'
+```
+
+## Working Directory (`pwd`) Parameter
+
+Both bash commands and text editor operations support an optional `pwd` parameter to control the working directory:
+
+### Bash Commands
+- The `pwd` parameter sets the working directory for command execution
+- Equivalent to running `cd /path && command` but cleaner
+- If not provided, commands run from the Flask app's default directory
+
+### Text Editor Operations  
+- The `pwd` parameter is used to resolve relative paths
+- **Absolute paths** (starting with `/`) ignore the `pwd` parameter
+- **Relative paths** are resolved relative to the `pwd` directory
+- If `pwd` is not provided, relative paths are resolved from the Flask app's default directory
+
+### Examples
+```bash
+# These are equivalent for bash:
+{"command": "cd /tmp && ls -la"}
+{"command": "ls -la", "pwd": "/tmp"}
+
+# These are equivalent for text editor:
+{"command": "view", "path": "/home/appuser/file.txt"}
+{"command": "view", "path": "file.txt", "pwd": "/home/appuser"}
 ```
 
 ## Anthropic Computer Use Schema Compatibility
