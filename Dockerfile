@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Install base packages (excluding firefox for now)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    xvfb x11vnc openbox curl ca-certificates python3 net-tools \
+    xvfb x11vnc openbox curl ca-certificates python3 python3-pip net-tools \
     xauth xfonts-base x11-xkb-utils \
     # GUI applications
     mousepad \
@@ -24,6 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Dependencies for Firefox installation
     wget \
     gpg \
+    # Dependencies for PyAutoGUI
+    python3-tk python3-dev scrot xsel \
  && rm -rf /var/lib/apt/lists/*
 
 # Install Firefox from Mozilla's official APT repository
@@ -50,6 +52,16 @@ RUN git clone --depth 1 --branch v1.4.0 https://github.com/novnc/noVNC.git /opt/
  && git clone --depth 1 --branch v0.11.0 https://github.com/novnc/websockify /opt/noVNC/utils/websockify \
  && ln -s /opt/noVNC/vnc.html /opt/noVNC/index.html
 
+# Install Python packages for the Computer Control API
+RUN pip3 install --no-cache-dir \
+    flask==2.3.3 \
+    pyautogui==0.9.54 \
+    pillow==10.0.1
+
+# Copy the Computer Control API
+COPY computer_control_api.py /home/appuser/computer_control_api.py
+COPY API_USAGE.md /home/appuser/API_USAGE.md
+
 # Entry script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
@@ -60,7 +72,7 @@ ENV VNC_PASSWORD=""
 # tini for proper signal handling
 RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 6080
+EXPOSE 6080 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD curl -fs http://localhost:${NO_VNC_PORT}/ || exit 1
 

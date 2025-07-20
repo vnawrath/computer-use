@@ -43,13 +43,30 @@ echo "[entrypoint] Starting noVNC on port ${NO_VNC_PORT}"
 /opt/noVNC/utils/novnc_proxy --vnc localhost:${VNC_PORT} --listen ${NO_VNC_PORT} &
 NOVNC_PID=$!
 
+echo "[entrypoint] Waiting for X11 to be fully ready..."
+sleep 2
+
+# Set up X11 permissions for appuser
+export DISPLAY=:0
+# Create a dummy .Xauthority file to avoid auth errors
+touch "$HOME/.Xauthority"
+# Allow all local connections to X11 for simplicity in container
+xhost +local: >/dev/null 2>&1 || true
+# Set XAUTHORITY environment
+export XAUTHORITY="$HOME/.Xauthority"
+
+echo "[entrypoint] Starting Computer Control API on port 5000"
+cd /home/appuser
+python3 computer_control_api.py &
+API_PID=$!
+
 # Trap signals to clean up
 cleanup() {
   echo "[entrypoint] Shutting down..."
-  kill $NOVNC_PID $WM_PID $XVFB_PID 2>/dev/null || true
+  kill $API_PID $NOVNC_PID $WM_PID $XVFB_PID 2>/dev/null || true
   wait 2>/dev/null || true
 }
 trap cleanup INT TERM
 
-echo "[entrypoint] All services started. (Xvfb pid $XVFB_PID)"
+echo "[entrypoint] All services started. (Xvfb pid $XVFB_PID, API pid $API_PID)"
 wait $NOVNC_PID
