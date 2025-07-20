@@ -1,0 +1,22 @@
+---
+alwaysApply: true
+description: "Always use modern Docker Compose V2 syntax"
+---
+
+# Docker Compose Syntax Rule
+
+Always use `docker compose` (with a space) instead of `docker-compose` (with a hyphen).
+
+## Correct Usage
+- `docker compose build`
+- `docker compose up -d`  
+- `docker compose down`
+- `docker compose logs`
+- `docker compose exec service_name bash`
+
+## Incorrect Usage
+- ❌ `docker-compose build`
+- ❌ `docker-compose up -d`
+- ❌ `docker-compose down`
+
+This follows Docker Compose V2 standards where the compose functionality is integrated as a Docker CLI plugin rather than a separate binary.
