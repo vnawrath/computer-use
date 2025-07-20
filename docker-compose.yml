@@ -1,0 +1,26 @@
+services:
+  computer-control:
+    build: .
+    container_name: computer-control
+    ports:
+      - "6080:6080"  # noVNC web interface
+      - "5000:5000"  # Computer Control API
+    volumes:
+      - appuser-home:/home/appuser  # Persistent volume for user data
+    environment:
+      - DISPLAY=:0
+      - SCREEN_GEOM=1280x800x24
+      - NO_VNC_PORT=6080
+      - VNC_PORT=5900
+      - VNC_PASSWORD=${VNC_PASSWORD:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:6080/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  appuser-home:
+    driver: local 
