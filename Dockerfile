@@ -26,6 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gpg \
     # Dependencies for PyAutoGUI
     python3-tk python3-dev scrot xsel \
+    # SSH client for generating SSH keys
+    openssh-client \
  && rm -rf /var/lib/apt/lists/*
 
 # Install Firefox from Mozilla's official APT repository
