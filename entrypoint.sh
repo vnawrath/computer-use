@@ -56,7 +56,7 @@ xhost +local: >/dev/null 2>&1 || true
 export XAUTHORITY="$HOME/.Xauthority"
 
 echo "[entrypoint] Starting Computer Control API on port 5000"
-cd /home/appuser
+cd /app
 python3 computer_control_api.py &
 API_PID=$!
 

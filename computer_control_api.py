@@ -112,7 +112,7 @@ def bash_command():
     try:
         data = request.json
         command = data.get("command", "")
-        pwd = data.get("pwd", None)  # Optional working directory
+        pwd = data.get("pwd", "/home/appuser")  # Default to appuser home directory
 
         if not command:
             return jsonify({"error": "Missing 'command' parameter"}), 400
@@ -150,7 +150,7 @@ def text_editor():
         data = request.json
         command = data.get("command", "")
         path = data.get("path", "")
-        pwd = data.get("pwd", None)  # Optional working directory
+        pwd = data.get("pwd", "/home/appuser")  # Default to appuser home directory
 
         if command == "view":
             return handle_view_file(path, pwd)
@@ -285,7 +285,9 @@ def handle_wait(duration):
 # Text editor handlers
 def _resolve_path(path, pwd=None):
     """Resolve path relative to pwd if provided and path is relative"""
-    if pwd is not None and not os.path.isabs(path):
+    if pwd is None:
+        pwd = "/home/appuser"  # Default to appuser home directory
+    if not os.path.isabs(path):
         return os.path.join(pwd, path)
     return path
 
@@ -313,7 +315,7 @@ def handle_create_file(path, content, pwd=None):
         return jsonify({"error": str(e)}), 500
 
 
-def handle_str_replace(path, old_str, new_str, pwd):
+def handle_str_replace(path, old_str, new_str, pwd=None):
     """Replace string in file"""
     try:
         resolved_path = _resolve_path(path, pwd)

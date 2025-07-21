@@ -60,9 +60,10 @@ RUN pip3 install --no-cache-dir \
     pyautogui==0.9.54 \
     pillow==10.0.1
 
-# Copy the Computer Control API
-COPY computer_control_api.py /home/appuser/computer_control_api.py
-COPY API_USAGE.md /home/appuser/API_USAGE.md
+# Create app directory and copy the Computer Control API there
+RUN mkdir -p /app
+COPY computer_control_api.py /app/computer_control_api.py
+COPY API_USAGE.md /app/API_USAGE.md
 
 # Entry script
 COPY entrypoint.sh /entrypoint.sh

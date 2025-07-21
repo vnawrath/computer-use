@@ -159,13 +159,13 @@ Both bash commands and text editor operations support an optional `pwd` paramete
 ### Bash Commands
 - The `pwd` parameter sets the working directory for command execution
 - Equivalent to running `cd /path && command` but cleaner
-- If not provided, commands run from the Flask app's default directory
+- If not provided, commands run from `/home/appuser` (the user's home directory)
 
 ### Text Editor Operations  
 - The `pwd` parameter is used to resolve relative paths
 - **Absolute paths** (starting with `/`) ignore the `pwd` parameter
 - **Relative paths** are resolved relative to the `pwd` directory
-- If `pwd` is not provided, relative paths are resolved from the Flask app's default directory
+- If `pwd` is not provided, relative paths are resolved from `/home/appuser` (the user's home directory)
 
 ### Examples
 ```bash
