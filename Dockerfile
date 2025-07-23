@@ -30,6 +30,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
  && rm -rf /var/lib/apt/lists/*
 
+# Install lazygit manually from GitHub releases
+RUN LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
+ && curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz" \
+ && tar -xf lazygit.tar.gz -C /usr/local/bin/ \
+ && rm lazygit.tar.gz
+
 # Install Firefox from Mozilla's official APT repository
 RUN install -d -m 0755 /etc/apt/keyrings && \
     wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O- | tee /etc/apt/keyrings/packages.mozilla.org.asc > /dev/null && \
