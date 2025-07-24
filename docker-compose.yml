@@ -13,6 +13,8 @@ services:
       - NO_VNC_PORT=6080
       - VNC_PORT=5900
       - VNC_PASSWORD=${VNC_PASSWORD:-}
+      - BASH_TIMEOUT=${BASH_TIMEOUT:-60}
+      - SCREENSHOT_TIMEOUT=${SCREENSHOT_TIMEOUT:-10}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://localhost:6080/"]

@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xauth xfonts-base x11-xkb-utils \
     # GUI applications
     mousepad \
-    xfce4-terminal \
+    kitty \
     pcmanfm \
     # Additional utilities
     xdg-utils \

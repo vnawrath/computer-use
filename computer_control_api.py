@@ -11,6 +11,12 @@ from PIL import Image
 os.environ["DISPLAY"] = ":0"
 os.environ["XAUTHORITY"] = "/home/appuser/.Xauthority"
 
+# Configure timeouts from environment variables
+BASH_TIMEOUT = int(os.environ.get("BASH_TIMEOUT", "30"))  # Default 30 seconds
+SCREENSHOT_TIMEOUT = int(
+    os.environ.get("SCREENSHOT_TIMEOUT", "10")
+)  # Default 10 seconds
+
 # Import pyautogui after setting environment variables
 try:
     import pyautogui
@@ -113,17 +119,19 @@ def bash_command():
         data = request.json
         command = data.get("command", "")
         pwd = data.get("pwd", "/home/appuser")  # Default to appuser home directory
+        timeout = data.get(
+            "timeout", BASH_TIMEOUT
+        )  # Allow per-request timeout override
 
         if not command:
             return jsonify({"error": "Missing 'command' parameter"}), 400
 
-        # Execute command safely
+        # Execute command using login shell to load .profile (includes NVM)
         result = subprocess.run(
-            command,
-            shell=True,
+            ["bash", "-l", "-c", command],  # Use login shell to load .profile
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=timeout,
             cwd=pwd,  # Use provided working directory
         )
 
@@ -136,7 +144,7 @@ def bash_command():
         )
 
     except subprocess.TimeoutExpired:
-        return jsonify({"error": "Command timed out"}), 408
+        return jsonify({"error": f"Command timed out after {timeout} seconds"}), 408
     except FileNotFoundError as e:
         return jsonify({"error": f"Working directory not found: {pwd}"}), 400
     except Exception as e:
@@ -174,7 +182,9 @@ def handle_screenshot():
     # Use scrot command for better container compatibility
     try:
         result = subprocess.run(
-            ["scrot", "-o", "/tmp/screenshot.png"], capture_output=True, timeout=10
+            ["scrot", "-o", "/tmp/screenshot.png"],
+            capture_output=True,
+            timeout=SCREENSHOT_TIMEOUT,
         )
         if result.returncode == 0:
             with open("/tmp/screenshot.png", "rb") as f:

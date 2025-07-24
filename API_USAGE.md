@@ -108,6 +108,20 @@ curl -X POST http://localhost:5000/bash \
   -d '{"command": "ls -la", "pwd": "/home/appuser/documents"}'
 ```
 
+### With Custom Timeout (per-request)
+```bash
+curl -X POST http://localhost:5000/bash \
+  -H "Content-Type: application/json" \
+  -d '{"command": "sleep 60 && echo done", "timeout": 120}'
+```
+
+### Long-running Command Example
+```bash
+curl -X POST http://localhost:5000/bash \
+  -H "Content-Type: application/json" \
+  -d '{"command": "npm install", "pwd": "/home/appuser/my-project", "timeout": 900}'
+```
+
 ## Text Editor Operations
 
 ### View File
@@ -152,14 +166,16 @@ curl -X POST http://localhost:5000/text_editor \
   -d '{"command": "str_replace", "path": "example.txt", "pwd": "/home/appuser", "old_str": "Hello", "new_str": "Hi"}'
 ```
 
-## Working Directory (`pwd`) Parameter
+## Working Directory (`pwd`) and Timeout Parameters
 
-Both bash commands and text editor operations support an optional `pwd` parameter to control the working directory:
+Both bash commands and text editor operations support optional parameters to control execution:
 
 ### Bash Commands
 - The `pwd` parameter sets the working directory for command execution
+- The `timeout` parameter sets the timeout in seconds for the specific command (overrides the default)
 - Equivalent to running `cd /path && command` but cleaner
 - If not provided, commands run from `/home/appuser` (the user's home directory)
+- If timeout not provided, uses the default timeout (configurable via `BASH_TIMEOUT` environment variable)
 
 ### Text Editor Operations  
 - The `pwd` parameter is used to resolve relative paths
@@ -172,6 +188,9 @@ Both bash commands and text editor operations support an optional `pwd` paramete
 # These are equivalent for bash:
 {"command": "cd /tmp && ls -la"}
 {"command": "ls -la", "pwd": "/tmp"}
+
+# Long-running command with custom timeout:
+{"command": "npm run build", "pwd": "/app", "timeout": 1800}
 
 # These are equivalent for text editor:
 {"command": "view", "path": "/home/appuser/file.txt"}
@@ -206,6 +225,30 @@ docker run -p 6080:6080 -p 5000:5000 computer-control
 ## Security Notes
 
 - This API runs in a containerized environment for safety
-- Bash commands have a 30-second timeout
+- Bash commands have a configurable timeout (default: 300 seconds/5 minutes)
+- Screenshots have a configurable timeout (default: 10 seconds)
 - File operations are limited to the container filesystem
-- PyAutoGUI failsafe is disabled for containerized operation 
+- PyAutoGUI failsafe is disabled for containerized operation
+
+## Environment Variables
+
+You can configure the following timeouts using environment variables:
+
+- `BASH_TIMEOUT`: Timeout for bash commands in seconds (default: 300)
+- `SCREENSHOT_TIMEOUT`: Timeout for screenshot operations in seconds (default: 10)
+
+### Example with Custom Timeouts
+```bash
+# Set longer timeout for bash commands (10 minutes)
+export BASH_TIMEOUT=600
+
+# Run with custom timeouts
+docker compose up -d
+```
+
+Or directly in docker-compose.yml:
+```yaml
+environment:
+  - BASH_TIMEOUT=600  # 10 minutes
+  - SCREENSHOT_TIMEOUT=15  # 15 seconds
+``` 
