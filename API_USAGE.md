@@ -20,7 +20,17 @@ Handle computer actions like mouse, keyboard, and screenshots.
 ```bash
 POST /bash
 ```
-Execute bash commands.
+Execute bash commands. Returns immediate response for short commands (≤30s timeout) or 202 with polling URL for long commands (>30s timeout).
+
+```bash
+GET /bash/status/{command_id}
+```
+Poll the status of an asynchronously running bash command.
+
+```bash
+GET /bash/commands
+```
+List all currently running and recently completed bash commands.
 
 ### Text Editor
 ```bash
@@ -95,6 +105,9 @@ curl -X POST http://localhost:5000/computer \
 
 ## Bash Commands
 
+Execute bash commands with automatic async handling for long-running operations.
+
+### Basic Command Execution
 ```bash
 curl -X POST http://localhost:5000/bash \
   -H "Content-Type: application/json" \
@@ -115,12 +128,101 @@ curl -X POST http://localhost:5000/bash \
   -d '{"command": "sleep 60 && echo done", "timeout": 120}'
 ```
 
-### Long-running Command Example
+### Asynchronous Command Execution
+
+**Important**: Commands with a timeout greater than 30 seconds are automatically executed asynchronously and return a `202 Accepted` response with a polling URL.
+
+#### Long-running Command (Async Response)
 ```bash
 curl -X POST http://localhost:5000/bash \
   -H "Content-Type: application/json" \
   -d '{"command": "npm install", "pwd": "/home/appuser/my-project", "timeout": 900}'
 ```
+
+**Response (202 Accepted):**
+```json
+{
+  "status": "accepted",
+  "message": "Command is running asynchronously",
+  "command_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "poll_url": "/bash/status/f47ac10b-58cc-4372-a567-0e02b2c3d479"
+}
+```
+
+#### Polling Command Status
+```bash
+curl -X GET http://localhost:5000/bash/status/f47ac10b-58cc-4372-a567-0e02b2c3d479
+```
+
+**Response (Running):**
+```json
+{
+  "status": "running",
+  "command": "npm install",
+  "started_at": "2024-01-15T10:30:00.123456",
+  "elapsed_seconds": 45.67
+}
+```
+
+**Response (Completed):**
+```json
+{
+  "status": "completed",
+  "stdout": "added 234 packages from 123 contributors...",
+  "stderr": "",
+  "returncode": 0,
+  "completed_at": "2024-01-15T10:32:15.789012"
+}
+```
+
+**Response (Timeout):**
+```json
+{
+  "status": "timeout",
+  "error": "Command timed out after 900 seconds",
+  "completed_at": "2024-01-15T10:45:00.123456"
+}
+```
+
+**Response (Error):**
+```json
+{
+  "status": "error",
+  "error": "Working directory not found: /invalid/path",
+  "completed_at": "2024-01-15T10:30:01.234567"
+}
+```
+
+#### List All Commands
+```bash
+curl -X GET http://localhost:5000/bash/commands
+```
+
+**Response:**
+```json
+{
+  "running": {
+    "f47ac10b-58cc-4372-a567-0e02b2c3d479": {
+      "command": "npm install",
+      "started_at": "2024-01-15T10:30:00.123456",
+      "elapsed_seconds": 45.67
+    }
+  },
+  "completed": {
+    "a1b2c3d4-e5f6-7890-1234-567890abcdef": {
+      "status": "completed",
+      "completed_at": "2024-01-15T10:25:30.987654"
+    }
+  }
+}
+```
+
+### Command Execution Behavior
+
+- **Synchronous (immediate response)**: Commands with timeout ≤ 30 seconds
+- **Asynchronous (202 + polling)**: Commands with timeout > 30 seconds
+- **Result retention**: Completed command results are kept for 1 hour, then automatically cleaned up
+- **Concurrent execution**: Multiple commands can run simultaneously in separate threads
 
 ## Text Editor Operations
 
@@ -137,6 +239,49 @@ curl -X POST http://localhost:5000/text_editor \
   -H "Content-Type: application/json" \
   -d '{"command": "view", "path": "example.txt", "pwd": "/home/appuser"}'
 ```
+
+**Successful Response (200 OK):**
+```json
+{
+  "content": "File contents here..."
+}
+```
+
+**Error Responses:**
+- **404 Not Found**: File does not exist
+  ```json
+  {
+    "error": "File not found: /path/to/file.txt"
+  }
+  ```
+
+- **400 Bad Request**: Path is a directory, not a file
+  ```json
+  {
+    "error": "Path is a directory, not a file: /path/to/directory"
+  }
+  ```
+
+- **400 Bad Request**: Path is not a regular file (e.g., special device file)
+  ```json
+  {
+    "error": "Path is not a regular file: /path/to/special/file"
+  }
+  ```
+
+- **400 Bad Request**: File contains binary data or invalid encoding
+  ```json
+  {
+    "error": "File contains binary data or invalid encoding: /path/to/binary/file"
+  }
+  ```
+
+- **403 Forbidden**: Permission denied
+  ```json
+  {
+    "error": "Permission denied: /path/to/protected/file"
+  }
+  ```
 
 ### Create File
 ```bash
@@ -225,21 +370,26 @@ docker run -p 6080:6080 -p 5000:5000 computer-control
 ## Security Notes
 
 - This API runs in a containerized environment for safety
-- Bash commands have a configurable timeout (default: 300 seconds/5 minutes)
+- Bash commands have a configurable timeout (default: 30 seconds)
+- Commands with timeout > 30 seconds run asynchronously to prevent blocking the API
+- Command results are stored in memory for 1 hour, then automatically cleaned up
 - Screenshots have a configurable timeout (default: 10 seconds)
 - File operations are limited to the container filesystem
 - PyAutoGUI failsafe is disabled for containerized operation
+- Multiple bash commands can run concurrently in separate threads
 
 ## Environment Variables
 
 You can configure the following timeouts using environment variables:
 
-- `BASH_TIMEOUT`: Timeout for bash commands in seconds (default: 300)
+- `BASH_TIMEOUT`: Default timeout for bash commands in seconds (default: 30)
 - `SCREENSHOT_TIMEOUT`: Timeout for screenshot operations in seconds (default: 10)
+
+**Note**: Commands with timeout > 30 seconds are automatically executed asynchronously with a 202 response and polling URL.
 
 ### Example with Custom Timeouts
 ```bash
-# Set longer timeout for bash commands (10 minutes)
+# Set longer default timeout for bash commands (10 minutes)
 export BASH_TIMEOUT=600
 
 # Run with custom timeouts
@@ -249,6 +399,6 @@ docker compose up -d
 Or directly in docker-compose.yml:
 ```yaml
 environment:
-  - BASH_TIMEOUT=600  # 10 minutes
+  - BASH_TIMEOUT=600  # 10 minutes (async commands)
   - SCREENSHOT_TIMEOUT=15  # 15 seconds
-``` 
+```

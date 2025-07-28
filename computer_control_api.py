@@ -5,6 +5,9 @@ import io
 import json
 import os
 import time
+import threading
+import uuid
+from datetime import datetime, timedelta
 from PIL import Image
 
 # Set display environment variable for containerized X11
@@ -16,6 +19,11 @@ BASH_TIMEOUT = int(os.environ.get("BASH_TIMEOUT", "30"))  # Default 30 seconds
 SCREENSHOT_TIMEOUT = int(
     os.environ.get("SCREENSHOT_TIMEOUT", "10")
 )  # Default 10 seconds
+
+# Global storage for tracking running bash commands
+running_commands = {}
+command_results = {}
+command_lock = threading.Lock()
 
 # Import pyautogui after setting environment variables
 try:
@@ -112,9 +120,52 @@ def computer_action():
         return jsonify({"error": str(e)}), 500
 
 
+def run_command_async(command_id, command, pwd, timeout):
+    """Run a bash command asynchronously and store the result"""
+    try:
+        # Execute command using login shell to load .profile (includes NVM)
+        result = subprocess.run(
+            ["bash", "-l", "-c", command],  # Use login shell to load .profile
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=pwd,  # Use provided working directory
+        )
+
+        with command_lock:
+            # Remove from running commands and add to results
+            if command_id in running_commands:
+                del running_commands[command_id]
+            command_results[command_id] = {
+                "status": "completed",
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode,
+                "completed_at": datetime.now(),
+            }
+    except subprocess.TimeoutExpired:
+        with command_lock:
+            if command_id in running_commands:
+                del running_commands[command_id]
+            command_results[command_id] = {
+                "status": "timeout",
+                "error": f"Command timed out after {timeout} seconds",
+                "completed_at": datetime.now(),
+            }
+    except Exception as e:
+        with command_lock:
+            if command_id in running_commands:
+                del running_commands[command_id]
+            command_results[command_id] = {
+                "status": "error",
+                "error": str(e),
+                "completed_at": datetime.now(),
+            }
+
+
 @app.route("/bash", methods=["POST"])
 def bash_command():
-    """Handle bash tool commands following Anthropic's schema"""
+    """Handle bash tool commands following Anthropic's schema with async support for long-running commands"""
     try:
         data = request.json
         command = data.get("command", "")
@@ -126,29 +177,149 @@ def bash_command():
         if not command:
             return jsonify({"error": "Missing 'command' parameter"}), 400
 
-        # Execute command using login shell to load .profile (includes NVM)
-        result = subprocess.run(
-            ["bash", "-l", "-c", command],  # Use login shell to load .profile
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=pwd,  # Use provided working directory
-        )
+        # For commands that might take longer than 30 seconds, use async execution
+        if timeout > 30:
+            # Generate unique command ID
+            command_id = str(uuid.uuid4())
 
-        return jsonify(
-            {
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "returncode": result.returncode,
-            }
-        )
+            with command_lock:
+                running_commands[command_id] = {
+                    "command": command,
+                    "pwd": pwd,
+                    "timeout": timeout,
+                    "started_at": datetime.now(),
+                }
 
-    except subprocess.TimeoutExpired:
-        return jsonify({"error": f"Command timed out after {timeout} seconds"}), 408
+            # Start command in background thread
+            thread = threading.Thread(
+                target=run_command_async, args=(command_id, command, pwd, timeout)
+            )
+            thread.daemon = True
+            thread.start()
+
+            # Return 202 with polling URL
+            return (
+                jsonify(
+                    {
+                        "status": "accepted",
+                        "message": "Command is running asynchronously",
+                        "command_id": command_id,
+                        "poll_url": f"/bash/status/{command_id}",
+                    }
+                ),
+                202,
+            )
+
+        else:
+            # For short commands, execute synchronously as before
+            try:
+                result = subprocess.run(
+                    ["bash", "-l", "-c", command],  # Use login shell to load .profile
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=pwd,  # Use provided working directory
+                )
+
+                return jsonify(
+                    {
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "returncode": result.returncode,
+                    }
+                )
+
+            except subprocess.TimeoutExpired:
+                return (
+                    jsonify({"error": f"Command timed out after {timeout} seconds"}),
+                    408,
+                )
+
     except FileNotFoundError as e:
         return jsonify({"error": f"Working directory not found: {pwd}"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/bash/status/<command_id>", methods=["GET"])
+def bash_command_status(command_id):
+    """Poll the status of an asynchronously running bash command"""
+    with command_lock:
+        # Check if command is still running
+        if command_id in running_commands:
+            command_info = running_commands[command_id]
+            return jsonify(
+                {
+                    "status": "running",
+                    "command": command_info["command"],
+                    "started_at": command_info["started_at"].isoformat(),
+                    "elapsed_seconds": (
+                        datetime.now() - command_info["started_at"]
+                    ).total_seconds(),
+                }
+            )
+
+        # Check if command has completed
+        if command_id in command_results:
+            result = command_results[command_id]
+            response_data = {
+                "completed_at": result["completed_at"].isoformat(),
+            }
+
+            if result["status"] == "completed":
+                response_data.update(
+                    {
+                        "status": "completed",
+                        "stdout": result["stdout"],
+                        "stderr": result["stderr"],
+                        "returncode": result["returncode"],
+                    }
+                )
+            elif result["status"] == "timeout":
+                response_data.update(
+                    {
+                        "status": "timeout",
+                        "error": result["error"],
+                    }
+                )
+            else:  # error
+                response_data.update(
+                    {
+                        "status": "error",
+                        "error": result["error"],
+                    }
+                )
+
+            return jsonify(response_data)
+
+        # Command ID not found
+        return jsonify({"error": "Command not found"}), 404
+
+
+@app.route("/bash/commands", methods=["GET"])
+def list_bash_commands():
+    """List all running and recently completed bash commands"""
+    with command_lock:
+        response = {"running": {}, "completed": {}}
+
+        # Add running commands
+        for cmd_id, cmd_info in running_commands.items():
+            response["running"][cmd_id] = {
+                "command": cmd_info["command"],
+                "started_at": cmd_info["started_at"].isoformat(),
+                "elapsed_seconds": (
+                    datetime.now() - cmd_info["started_at"]
+                ).total_seconds(),
+            }
+
+        # Add completed commands
+        for cmd_id, result in command_results.items():
+            response["completed"][cmd_id] = {
+                "status": result["status"],
+                "completed_at": result["completed_at"].isoformat(),
+            }
+
+        return jsonify(response)
 
 
 @app.route("/text_editor", methods=["POST"])
@@ -306,11 +477,46 @@ def handle_view_file(path, pwd=None):
     """View file contents"""
     try:
         resolved_path = _resolve_path(path, pwd)
+
+        # Check if path exists
+        if not os.path.exists(resolved_path):
+            return jsonify({"error": f"File not found: {resolved_path}"}), 404
+
+        # Check if path is a directory
+        if os.path.isdir(resolved_path):
+            return (
+                jsonify({"error": f"Path is a directory, not a file: {resolved_path}"}),
+                400,
+            )
+
+        # Check if path is actually a file
+        if not os.path.isfile(resolved_path):
+            return (
+                jsonify({"error": f"Path is not a regular file: {resolved_path}"}),
+                400,
+            )
+
         with open(resolved_path, "r") as f:
             content = f.read()
         return jsonify({"content": content})
     except FileNotFoundError:
         return jsonify({"error": f"File not found: {resolved_path}"}), 404
+    except PermissionError:
+        return jsonify({"error": f"Permission denied: {resolved_path}"}), 403
+    except IsADirectoryError:
+        return (
+            jsonify({"error": f"Path is a directory, not a file: {resolved_path}"}),
+            400,
+        )
+    except UnicodeDecodeError:
+        return (
+            jsonify(
+                {
+                    "error": f"File contains binary data or invalid encoding: {resolved_path}"
+                }
+            ),
+            400,
+        )
 
 
 def handle_create_file(path, content, pwd=None):
@@ -345,6 +551,33 @@ def handle_str_replace(path, old_str, new_str, pwd=None):
         return jsonify({"error": f"File not found: {resolved_path}"}), 404
 
 
+def cleanup_old_results():
+    """Remove command results older than 1 hour to prevent memory leaks"""
+    cutoff_time = datetime.now() - timedelta(hours=1)
+    with command_lock:
+        expired_commands = [
+            cmd_id
+            for cmd_id, result in command_results.items()
+            if result["completed_at"] < cutoff_time
+        ]
+        for cmd_id in expired_commands:
+            del command_results[cmd_id]
+
+        if expired_commands:
+            print(f"Cleaned up {len(expired_commands)} old command results")
+
+
+def start_cleanup_timer():
+    """Start a timer to periodically clean up old results"""
+    cleanup_old_results()
+    # Schedule next cleanup in 30 minutes
+    timer = threading.Timer(1800, start_cleanup_timer)
+    timer.daemon = True
+    timer.start()
+
+
 if __name__ == "__main__":
+    # Start the cleanup timer for old command results
+    start_cleanup_timer()
     # Run on all interfaces to allow external connections
     app.run(host="0.0.0.0", port=5000, debug=True)
