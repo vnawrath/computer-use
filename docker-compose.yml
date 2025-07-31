@@ -12,7 +12,11 @@ services:
       - SCREEN_GEOM=1280x800x24
       - NO_VNC_PORT=6080
       - VNC_PORT=5900
-      - VNC_PASSWORD=${VNC_PASSWORD:-}
+      # Security: VNC password is now required for internet deployment
+      - VNC_PASSWORD=${VNC_PASSWORD:?VNC_PASSWORD environment variable is required}
+      # Security: API key is required for internet deployment
+      - API_KEY=${API_KEY:?API_KEY environment variable is required}
+      # System timeouts
       - BASH_TIMEOUT=${BASH_TIMEOUT:-60}
       - SCREENSHOT_TIMEOUT=${SCREENSHOT_TIMEOUT:-10}
     restart: unless-stopped

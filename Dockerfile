@@ -63,6 +63,7 @@ RUN git clone --depth 1 --branch v1.4.0 https://github.com/novnc/noVNC.git /opt/
 # Install Python packages for the Computer Control API
 RUN pip3 install --no-cache-dir \
     flask==2.3.3 \
+    flask-limiter==3.5.0 \
     pyautogui==0.9.54 \
     pillow==10.0.1
 

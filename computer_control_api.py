@@ -9,6 +9,9 @@ import threading
 import uuid
 from datetime import datetime, timedelta
 from PIL import Image
+from functools import wraps
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # Set display environment variable for containerized X11
 os.environ["DISPLAY"] = ":0"
@@ -36,6 +39,58 @@ except Exception as e:
 
 app = Flask(__name__)
 
+# Security configuration
+API_KEY = os.environ.get("API_KEY")
+if not API_KEY:
+    print("WARNING: No API_KEY environment variable set. API will be unsecured!")
+    print("Please set API_KEY environment variable for production deployment.")
+
+# Rate limiting configuration
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["100 per hour", "20 per minute"],
+)
+
+
+def require_api_key(f):
+    """Decorator to require API key authentication"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not API_KEY:
+            # If no API key is configured, allow access but log warning
+            print("WARNING: API accessed without API key configured!")
+            return f(*args, **kwargs)
+
+        provided_key = request.headers.get("X-API-Key")
+        if not provided_key or provided_key != API_KEY:
+            return (
+                jsonify(
+                    {
+                        "error": "Unauthorized",
+                        "message": "Valid API key required. Provide X-API-Key header.",
+                    }
+                ),
+                401,
+            )
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses"""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    return response
+
+
 # Configure pyautogui
 pyautogui.FAILSAFE = False  # Disable failsafe for containerized environment
 pyautogui.PAUSE = 0.1  # Small delay between actions
@@ -48,6 +103,8 @@ def health_check():
 
 
 @app.route("/computer", methods=["POST"])
+@limiter.limit("50 per minute")
+@require_api_key
 def computer_action():
     """Handle computer use tool actions following Anthropic's schema"""
     try:
@@ -164,6 +221,8 @@ def run_command_async(command_id, command, pwd, timeout):
 
 
 @app.route("/bash", methods=["POST"])
+@limiter.limit("30 per minute")
+@require_api_key
 def bash_command():
     """Handle bash tool commands following Anthropic's schema with async support for long-running commands"""
     try:
@@ -242,6 +301,7 @@ def bash_command():
 
 
 @app.route("/bash/status/<command_id>", methods=["GET"])
+@require_api_key
 def bash_command_status(command_id):
     """Poll the status of an asynchronously running bash command"""
     with command_lock:
@@ -297,6 +357,7 @@ def bash_command_status(command_id):
 
 
 @app.route("/bash/commands", methods=["GET"])
+@require_api_key
 def list_bash_commands():
     """List all running and recently completed bash commands"""
     with command_lock:
@@ -323,6 +384,8 @@ def list_bash_commands():
 
 
 @app.route("/text_editor", methods=["POST"])
+@limiter.limit("60 per minute")
+@require_api_key
 def text_editor():
     """Handle basic text editor operations"""
     try:

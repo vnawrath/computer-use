@@ -1,0 +1,17 @@
+# Computer Control API Security Configuration
+# Copy this file to .env and set your own secure values
+
+# API Key for securing the Computer Control API
+# Generate a strong random key (e.g., using: openssl rand -hex 32)
+API_KEY=your-secure-api-key-here
+
+# VNC Password for securing the noVNC interface
+# Use a strong password for VNC access
+VNC_PASSWORD=your-secure-vnc-password-here
+
+# Optional: System timeouts (use defaults if not specified)
+BASH_TIMEOUT=60
+SCREENSHOT_TIMEOUT=10
+
+# Optional: Screen geometry (use default if not specified)
+SCREEN_GEOM=1280x800x24

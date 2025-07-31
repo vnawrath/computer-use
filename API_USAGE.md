@@ -2,41 +2,58 @@
 
 This REST API provides computer control capabilities compatible with Anthropic's Computer Use tools schema. The API runs on port 5000 inside the container.
 
+## Security & Authentication
+
+**Important**: All endpoints except `/health` require API key authentication when deployed.
+
+### Authentication
+Include your API key in the `X-API-Key` header:
+```bash
+curl -H "X-API-Key: your-api-key-here" https://your-domain.com/endpoint
+```
+
+### Rate Limits
+The API implements rate limiting per IP address:
+- Computer control: 50 requests/minute
+- Bash commands: 30 requests/minute  
+- Text editor: 60 requests/minute
+- Global: 100 requests/hour, 20 requests/minute
+
 ## Available Endpoints
 
 ### Health Check
 ```bash
 GET /health
 ```
-Returns the health status of the API.
+Returns the health status of the API. **No authentication required.**
 
 ### Computer Control
 ```bash
 POST /computer
 ```
-Handle computer actions like mouse, keyboard, and screenshots.
+Handle computer actions like mouse, keyboard, and screenshots. **Requires API key.**
 
 ### Bash Commands
 ```bash
 POST /bash
 ```
-Execute bash commands. Returns immediate response for short commands (≤30s timeout) or 202 with polling URL for long commands (>30s timeout).
+Execute bash commands. **Requires API key.** Returns immediate response for short commands (≤30s timeout) or 202 with polling URL for long commands (>30s timeout).
 
 ```bash
 GET /bash/status/{command_id}
 ```
-Poll the status of an asynchronously running bash command.
+Poll the status of an asynchronously running bash command. **Requires API key.**
 
 ```bash
 GET /bash/commands
 ```
-List all currently running and recently completed bash commands.
+List all currently running and recently completed bash commands. **Requires API key.**
 
 ### Text Editor
 ```bash
 POST /text_editor
 ```
-Basic file operations.
+Basic file operations. **Requires API key.**
 
 ## Computer Control Actions
 
@@ -44,6 +61,7 @@ Basic file operations.
 ```bash
 curl -X POST http://localhost:5000/computer \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"action": "screenshot"}'
 ```
 
@@ -51,6 +69,7 @@ curl -X POST http://localhost:5000/computer \
 ```bash
 curl -X POST http://localhost:5000/computer \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"action": "left_click", "coordinate": [100, 200]}'
 ```
 
@@ -58,6 +77,7 @@ curl -X POST http://localhost:5000/computer \
 ```bash
 curl -X POST http://localhost:5000/computer \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"action": "type", "text": "Hello World!"}'
 ```
 
@@ -65,6 +85,7 @@ curl -X POST http://localhost:5000/computer \
 ```bash
 curl -X POST http://localhost:5000/computer \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"action": "key", "key": "enter"}'
 ```
 
@@ -72,6 +93,7 @@ curl -X POST http://localhost:5000/computer \
 ```bash
 curl -X POST http://localhost:5000/computer \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"action": "key", "key": "ctrl+c"}'
 ```
 
