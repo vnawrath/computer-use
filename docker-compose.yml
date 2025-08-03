@@ -7,6 +7,10 @@ services:
       - "5000:5000"  # Computer Control API
     volumes:
       - appuser-home:/home/appuser  # Persistent volume for user data
+    # Additional settings for Electron apps like Obsidian
+    shm_size: 2g  # Increase shared memory for Electron apps
+    security_opt:
+      - seccomp:unconfined  # Disable seccomp for Electron compatibility
     environment:
       - DISPLAY=:0
       - SCREEN_GEOM=1280x800x24

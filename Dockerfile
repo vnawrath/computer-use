@@ -72,6 +72,25 @@ RUN OBSIDIAN_VERSION=$(curl -s "https://api.github.com/repos/obsidianmd/obsidian
  && rm obsidian.deb \
  && rm -rf /var/lib/apt/lists/*
 
+# Create Obsidian wrapper script to handle sandboxing issues in containers
+RUN echo '#!/bin/bash\n\
+# Obsidian wrapper script for Docker containers\n\
+# Disables sandboxing to prevent namespace issues\n\
+exec /opt/Obsidian/obsidian \\\n\
+  --no-sandbox \\\n\
+  --disable-setuid-sandbox \\\n\
+  --disable-dev-shm-usage \\\n\
+  --disable-gpu \\\n\
+  --disable-software-rasterizer \\\n\
+  --disable-background-timer-throttling \\\n\
+  --disable-backgrounding-occluded-windows \\\n\
+  --disable-renderer-backgrounding \\\n\
+  --disable-features=TranslateUI \\\n\
+  --disable-ipc-flooding-protection \\\n\
+  "$@"' > /usr/local/bin/obsidian-safe \
+ && chmod +x /usr/local/bin/obsidian-safe \
+ && ln -sf /usr/local/bin/obsidian-safe /usr/local/bin/obsidian
+
 # Add a non-root user
 RUN useradd -m -d $HOME -s /bin/bash $USER
 
