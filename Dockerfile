@@ -53,6 +53,25 @@ RUN install -d -m 0755 /etc/apt/keyrings && \
         libnss3-dev \
  && rm -rf /var/lib/apt/lists/*
 
+# Install Obsidian from official .deb package
+RUN OBSIDIAN_VERSION=$(curl -s "https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
+ && curl -Lo obsidian.deb "https://github.com/obsidianmd/obsidian-releases/releases/latest/download/obsidian_${OBSIDIAN_VERSION}_amd64.deb" \
+ && apt-get update && apt-get install -y --no-install-recommends \
+    ./obsidian.deb \
+    # Additional dependencies for Obsidian
+    libatomic1 \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libxss1 \
+    libasound2 \
+ && rm obsidian.deb \
+ && rm -rf /var/lib/apt/lists/*
+
 # Add a non-root user
 RUN useradd -m -d $HOME -s /bin/bash $USER
 
