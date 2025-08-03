@@ -50,6 +50,7 @@ RUN install -d -m 0755 /etc/apt/keyrings && \
         libgles2-mesa-dev \
         dbus-x11 \
         fonts-dejavu-core \
+        libnss3-dev \
  && rm -rf /var/lib/apt/lists/*
 
 # Add a non-root user
