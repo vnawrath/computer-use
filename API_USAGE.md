@@ -101,6 +101,7 @@ curl -X POST http://localhost:5000/computer \
 ```bash
 curl -X POST http://localhost:5000/computer \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"action": "mouse_move", "coordinate": [500, 300]}'
 ```
 
@@ -108,6 +109,7 @@ curl -X POST http://localhost:5000/computer \
 ```bash
 curl -X POST http://localhost:5000/computer \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"action": "scroll", "coordinate": [500, 300], "scroll_direction": "down", "scroll_amount": 3}'
 ```
 
@@ -115,6 +117,7 @@ curl -X POST http://localhost:5000/computer \
 ```bash
 curl -X POST http://localhost:5000/computer \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"action": "left_click_drag", "start_coordinate": [100, 100], "end_coordinate": [200, 200]}'
 ```
 
@@ -122,6 +125,7 @@ curl -X POST http://localhost:5000/computer \
 ```bash
 curl -X POST http://localhost:5000/computer \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"action": "wait", "duration": 2.0}'
 ```
 
@@ -133,6 +137,7 @@ Execute bash commands with automatic async handling for long-running operations.
 ```bash
 curl -X POST http://localhost:5000/bash \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"command": "ls -la"}'
 ```
 
@@ -140,6 +145,7 @@ curl -X POST http://localhost:5000/bash \
 ```bash
 curl -X POST http://localhost:5000/bash \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"command": "ls -la", "pwd": "/home/appuser/documents"}'
 ```
 
@@ -147,6 +153,7 @@ curl -X POST http://localhost:5000/bash \
 ```bash
 curl -X POST http://localhost:5000/bash \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"command": "sleep 60 && echo done", "timeout": 120}'
 ```
 
@@ -158,6 +165,7 @@ curl -X POST http://localhost:5000/bash \
 ```bash
 curl -X POST http://localhost:5000/bash \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"command": "npm install", "pwd": "/home/appuser/my-project", "timeout": 900}'
 ```
 
@@ -173,7 +181,8 @@ curl -X POST http://localhost:5000/bash \
 
 #### Polling Command Status
 ```bash
-curl -X GET http://localhost:5000/bash/status/f47ac10b-58cc-4372-a567-0e02b2c3d479
+curl -X GET http://localhost:5000/bash/status/f47ac10b-58cc-4372-a567-0e02b2c3d479 \
+  -H "X-API-Key: your-api-key-here"
 ```
 
 **Response (Running):**
@@ -217,7 +226,8 @@ curl -X GET http://localhost:5000/bash/status/f47ac10b-58cc-4372-a567-0e02b2c3d4
 
 #### List All Commands
 ```bash
-curl -X GET http://localhost:5000/bash/commands
+curl -X GET http://localhost:5000/bash/commands \
+  -H "X-API-Key: your-api-key-here"
 ```
 
 **Response:**
@@ -252,6 +262,7 @@ curl -X GET http://localhost:5000/bash/commands
 ```bash
 curl -X POST http://localhost:5000/text_editor \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"command": "view", "path": "/home/appuser/example.txt"}'
 ```
 
@@ -259,6 +270,7 @@ curl -X POST http://localhost:5000/text_editor \
 ```bash
 curl -X POST http://localhost:5000/text_editor \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"command": "view", "path": "example.txt", "pwd": "/home/appuser"}'
 ```
 
@@ -309,6 +321,7 @@ curl -X POST http://localhost:5000/text_editor \
 ```bash
 curl -X POST http://localhost:5000/text_editor \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"command": "create", "path": "/home/appuser/example.txt", "file_text": "Hello World!"}'
 ```
 
@@ -316,6 +329,7 @@ curl -X POST http://localhost:5000/text_editor \
 ```bash
 curl -X POST http://localhost:5000/text_editor \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"command": "create", "path": "example.txt", "pwd": "/home/appuser", "file_text": "Hello World!"}'
 ```
 
@@ -323,6 +337,7 @@ curl -X POST http://localhost:5000/text_editor \
 ```bash
 curl -X POST http://localhost:5000/text_editor \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"command": "str_replace", "path": "/home/appuser/example.txt", "old_str": "Hello", "new_str": "Hi"}'
 ```
 
@@ -330,6 +345,7 @@ curl -X POST http://localhost:5000/text_editor \
 ```bash
 curl -X POST http://localhost:5000/text_editor \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
   -d '{"command": "str_replace", "path": "example.txt", "pwd": "/home/appuser", "old_str": "Hello", "new_str": "Hi"}'
 ```
 

@@ -28,7 +28,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-tk python3-dev scrot xsel \
     # SSH client for generating SSH keys
     openssh-client \
+    # Comprehensive font packages for emoji and Unicode support
+    fonts-noto-color-emoji \
+    fonts-noto-core \
+    fonts-noto-mono \
+    fonts-liberation \
+    fonts-dejavu \
+    fonts-jetbrains-mono \
+    fonts-powerline \
+    fonts-symbola \
+    fontconfig \
  && rm -rf /var/lib/apt/lists/*
+
+# Rebuild font cache to ensure all fonts are properly registered
+RUN fc-cache -fv
 
 # Install lazygit manually from GitHub releases
 RUN LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*') \
