@@ -13,11 +13,15 @@ curl -H "X-API-Key: your-api-key-here" https://your-domain.com/endpoint
 ```
 
 ### Rate Limits
-The API implements rate limiting per IP address:
-- Computer control: 50 requests/minute
-- Bash commands: 30 requests/minute  
-- Text editor: 60 requests/minute
-- Global: 100 requests/hour, 20 requests/minute
+The API implements rate limiting per IP address. Defaults are generous and configurable via environment variables:
+- Computer control: 60 requests/minute, 3600/hour (env: `COMPUTER_RATE_PER_MINUTE`, `COMPUTER_RATE_PER_HOUR`)
+- Bash commands: 60 requests/minute, 3600/hour (env: `BASH_RATE_PER_MINUTE`, `BASH_RATE_PER_HOUR`)
+- Text editor: 60 requests/minute, 3600/hour (env: `TEXT_RATE_PER_MINUTE`, `TEXT_RATE_PER_HOUR`)
+- Global defaults: 60 requests/minute, 3600/hour (env: `GLOBAL_RATE_PER_MINUTE`, `GLOBAL_RATE_PER_HOUR`)
+
+Notes:
+- Per-endpoint limits override global defaults and include both minute and hour windows.
+- Limits are keyed by client IP. If running behind a proxy, real client IPs are respected via `ProxyFix`.
 
 ## Available Endpoints
 

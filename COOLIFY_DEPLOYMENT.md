@@ -122,7 +122,7 @@ Coolify's built-in proxy handles SSL termination and provides additional securit
 
 ### Monitoring and Maintenance
 - **Monitor logs**: Check Coolify application logs regularly
-- **Rate limiting**: The API has built-in rate limits (100 requests/hour, 20/minute per IP)
+- **Rate limiting**: The API has configurable rate limits (defaults: 3600/hour, 60/minute per IP). Adjust via env vars.
 - **Health checks**: Coolify automatically monitors application health
 - **Updates**: Keep your deployment updated with security patches
 
@@ -146,11 +146,11 @@ curl -X POST https://your-api-domain.com/bash \
 
 ## Rate Limits
 
-The API implements the following rate limits per IP address:
-- **Computer control endpoints**: 50 requests per minute
-- **Bash execution**: 30 requests per minute  
-- **Text editor**: 60 requests per minute
-- **Overall limit**: 100 requests per hour, 20 per minute
+The API implements the following configurable rate limits per IP address (defaults shown):
+- **Computer control endpoints**: 60/minute, 3600/hour (`COMPUTER_RATE_PER_MINUTE`, `COMPUTER_RATE_PER_HOUR`)
+- **Bash execution**: 60/minute, 3600/hour (`BASH_RATE_PER_MINUTE`, `BASH_RATE_PER_HOUR`)
+- **Text editor**: 60/minute, 3600/hour (`TEXT_RATE_PER_MINUTE`, `TEXT_RATE_PER_HOUR`)
+- **Overall default**: 60/minute, 3600/hour (`GLOBAL_RATE_PER_MINUTE`, `GLOBAL_RATE_PER_HOUR`)
 
 ## Troubleshooting
 

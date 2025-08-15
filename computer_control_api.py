@@ -12,6 +12,7 @@ from PIL import Image
 from functools import wraps
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Set display environment variable for containerized X11
 os.environ["DISPLAY"] = ":0"
@@ -39,17 +40,35 @@ except Exception as e:
 
 app = Flask(__name__)
 
+# Trust one proxy hop (e.g., Coolify/Reverse proxy) so client IPs are derived from X-Forwarded-For
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
 # Security configuration
 API_KEY = os.environ.get("API_KEY")
 if not API_KEY:
     print("WARNING: No API_KEY environment variable set. API will be unsecured!")
     print("Please set API_KEY environment variable for production deployment.")
 
-# Rate limiting configuration
+# Rate limiting configuration (configurable via environment variables)
+GLOBAL_RATE_PER_MINUTE = os.environ.get("GLOBAL_RATE_PER_MINUTE", "60")
+GLOBAL_RATE_PER_HOUR = os.environ.get("GLOBAL_RATE_PER_HOUR", "3600")
+
+COMPUTER_RATE_PER_MINUTE = os.environ.get("COMPUTER_RATE_PER_MINUTE", "60")
+COMPUTER_RATE_PER_HOUR = os.environ.get("COMPUTER_RATE_PER_HOUR", "3600")
+
+BASH_RATE_PER_MINUTE = os.environ.get("BASH_RATE_PER_MINUTE", "60")
+BASH_RATE_PER_HOUR = os.environ.get("BASH_RATE_PER_HOUR", "3600")
+
+TEXT_RATE_PER_MINUTE = os.environ.get("TEXT_RATE_PER_MINUTE", "60")
+TEXT_RATE_PER_HOUR = os.environ.get("TEXT_RATE_PER_HOUR", "3600")
+
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["100 per hour", "20 per minute"],
+    default_limits=[
+        f"{GLOBAL_RATE_PER_HOUR} per hour",
+        f"{GLOBAL_RATE_PER_MINUTE} per minute",
+    ],
 )
 
 
@@ -103,7 +122,10 @@ def health_check():
 
 
 @app.route("/computer", methods=["POST"])
-@limiter.limit("50 per minute")
+@limiter.limit(
+    f"{COMPUTER_RATE_PER_MINUTE} per minute; {COMPUTER_RATE_PER_HOUR} per hour",
+    override_defaults=True,
+)
 @require_api_key
 def computer_action():
     """Handle computer use tool actions following Anthropic's schema"""
@@ -221,7 +243,10 @@ def run_command_async(command_id, command, pwd, timeout):
 
 
 @app.route("/bash", methods=["POST"])
-@limiter.limit("30 per minute")
+@limiter.limit(
+    f"{BASH_RATE_PER_MINUTE} per minute; {BASH_RATE_PER_HOUR} per hour",
+    override_defaults=True,
+)
 @require_api_key
 def bash_command():
     """Handle bash tool commands following Anthropic's schema with async support for long-running commands"""
@@ -384,7 +409,10 @@ def list_bash_commands():
 
 
 @app.route("/text_editor", methods=["POST"])
-@limiter.limit("60 per minute")
+@limiter.limit(
+    f"{TEXT_RATE_PER_MINUTE} per minute; {TEXT_RATE_PER_HOUR} per hour",
+    override_defaults=True,
+)
 @require_api_key
 def text_editor():
     """Handle basic text editor operations"""
