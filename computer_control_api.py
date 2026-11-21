@@ -110,6 +110,12 @@ def add_security_headers(response):
     return response
 
 
+# TV mode: remote-control page for very old browsers (see tv_mode.py)
+from tv_mode import register_tv
+
+register_tv(app, limiter, API_KEY)
+
+
 # Configure pyautogui
 pyautogui.FAILSAFE = False  # Disable failsafe for containerized environment
 pyautogui.PAUSE = 0.1  # Small delay between actions

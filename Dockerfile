@@ -26,6 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gpg \
     # Dependencies for PyAutoGUI
     python3-tk python3-dev scrot xsel \
+    # xdotool for unicode typing in TV mode
+    xdotool \
     # SSH client for generating SSH keys
     openssh-client \
     # Comprehensive font packages for emoji and Unicode support
@@ -122,6 +124,7 @@ RUN pip3 install --no-cache-dir \
 # Create app directory and copy the Computer Control API there
 RUN mkdir -p /app
 COPY computer_control_api.py /app/computer_control_api.py
+COPY tv_mode.py /app/tv_mode.py
 COPY API_USAGE.md /app/API_USAGE.md
 
 # Entry script
