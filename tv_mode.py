@@ -35,6 +35,8 @@ DEFAULT_WIDTH = 960
 REFRESH_MS = int(os.environ.get("TV_REFRESH_MS", "1500"))
 JPEG_QUALITY = int(os.environ.get("TV_JPEG_QUALITY", "60"))
 FRAME_CACHE_SECONDS = 0.4
+MJPEG_FPS = int(os.environ.get("TV_MJPEG_FPS", "10"))
+MJPEG_QUALITY = int(os.environ.get("TV_MJPEG_QUALITY", "6"))
 LIVE_FPS = int(os.environ.get("TV_LIVE_FPS", "15"))
 LIVE_BITRATE = os.environ.get("TV_LIVE_BITRATE", "2500k")
 AUDIO_SOURCE = os.environ.get("TV_AUDIO_SOURCE", "tv.monitor")
@@ -83,29 +85,24 @@ JS = """(function () {
 """
 
 LIVE_JS = """(function () {
-  var v = document.getElementById('live');
-  if (!v) { return; }
-  var timer = null;
-  function reconnect() {
-    if (timer) { return; }
-    timer = setTimeout(function () {
-      timer = null;
-      v.src = '/tv/live.mp4?t=' + (new Date()).getTime();
-      try { v.play(); } catch (e) {}
-    }, 2000);
+  var img = document.getElementById('live');
+  var snd = document.getElementById('snd');
+  function later(fn, ms) { setTimeout(fn, ms); }
+  if (img) {
+    img.onerror = function () {
+      later(function () { img.src = '/tv/mjpeg?t=' + (new Date()).getTime(); }, 2000);
+    };
   }
-  v.addEventListener('error', reconnect, false);
-  v.addEventListener('ended', reconnect, false);
-  v.addEventListener('stalled', reconnect, false);
-  // If playback falls far behind live, jump back to the live edge.
-  setInterval(function () {
-    try {
-      var b = v.buffered;
-      if (b.length && b.end(b.length - 1) - v.currentTime > 4) {
-        v.currentTime = b.end(b.length - 1) - 0.5;
-      }
-    } catch (e) {}
-  }, 3000);
+  if (snd && snd.addEventListener) {
+    var restart = function () {
+      later(function () {
+        snd.src = '/tv/audio.mp3?t=' + (new Date()).getTime();
+        try { snd.play(); } catch (e) {}
+      }, 2000);
+    };
+    snd.addEventListener('error', restart, false);
+    snd.addEventListener('ended', restart, false);
+  }
 })();
 """
 
@@ -121,6 +118,7 @@ form { margin: 0; }
 .err { color: #f88; }
 body.livebody { margin: 0; background: #000; overflow: hidden; }
 .live { display: block; width: 100%; height: 100%; height: 100vh; background: #000; object-fit: contain; }
+.snd { position: absolute; left: 8px; bottom: 8px; opacity: 0.6; }
 .audiobar { height: 40px; font-size: 14px; }
 .audiobar a { color: #9cf; }
 .ctl { width: 100%; height: 650px; height: calc(100vh - 52px); border: 0; }
@@ -215,7 +213,8 @@ def register_tv(app, limiter, api_key):
 
         # Live view: one H.264 + AAC stream in a plain <video>. Control happens via the API.
         body = (
-            '<video id="live" class="live" src="/tv/live.mp4" autoplay controls playsinline></video>'
+            '<img id="live" class="live" src="/tv/mjpeg" alt="">'
+            '<div class="snd"><audio id="snd" src="/tv/audio.mp3" autoplay controls preload="none"></audio></div>'
             '<script type="text/javascript" src="/tv/live.js"></script>'
         )
         return html_page(body, body_class="livebody")
@@ -437,6 +436,42 @@ def register_tv(app, limiter, api_key):
         return resp
 
     @limiter.exempt
+    def tv_mjpeg():
+        if not authed():
+            return Response("Unauthorized", status=403)
+        try:
+            sw, sh = screen_size()
+        except Exception:
+            sw, sh = 1280, 800
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-f", "x11grab", "-framerate", str(MJPEG_FPS), "-video_size", f"{sw}x{sh}",
+            "-draw_mouse", "1", "-i", os.environ.get("DISPLAY", ":0"),
+            "-c:v", "mjpeg", "-q:v", str(MJPEG_QUALITY), "-pix_fmt", "yuvj420p",
+            "-f", "mpjpeg", "-boundary_tag", "frame", "-",
+        ]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+        def generate():
+            try:
+                while True:
+                    chunk = proc.stdout.read(16384)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                proc.kill()
+                proc.wait()
+
+        resp = Response(
+            generate(),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+            direct_passthrough=True,
+        )
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    @limiter.exempt
     def tv_live_js():
         resp = Response(LIVE_JS, mimetype="text/javascript")
         resp.headers["Cache-Control"] = "max-age=60"
@@ -457,6 +492,7 @@ def register_tv(app, limiter, api_key):
     app.add_url_rule("/tv", "tv_page", tv_page, methods=["GET"])
     app.add_url_rule("/tv/control", "tv_control", tv_control, methods=["GET"])
     app.add_url_rule("/tv/live.mp4", "tv_live", tv_live, methods=["GET"])
+    app.add_url_rule("/tv/mjpeg", "tv_mjpeg", tv_mjpeg, methods=["GET"])
     app.add_url_rule("/tv/live.js", "tv_live_js", tv_live_js, methods=["GET"])
     app.add_url_rule("/tv/audio.mp3", "tv_audio", tv_audio, methods=["GET"])
     app.add_url_rule("/tv/login", "tv_login", tv_login, methods=["POST"])
