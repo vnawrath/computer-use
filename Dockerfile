@@ -134,6 +134,9 @@ RUN chmod +x /entrypoint.sh
 # Optional: set a VNC/password (empty by default). User can set at runtime.
 ENV VNC_PASSWORD=""
 
+# Audio for TV mode: virtual PulseAudio sink + ffmpeg MP3 stream
+RUN apt-get update && apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils ffmpeg && rm -rf /var/lib/apt/lists/*
+
 # tini for proper signal handling
 RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 

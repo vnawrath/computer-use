@@ -35,6 +35,7 @@ DEFAULT_WIDTH = 960
 REFRESH_MS = int(os.environ.get("TV_REFRESH_MS", "1500"))
 JPEG_QUALITY = int(os.environ.get("TV_JPEG_QUALITY", "60"))
 FRAME_CACHE_SECONDS = 0.4
+AUDIO_SOURCE = os.environ.get("TV_AUDIO_SOURCE", "tv.monitor")
 
 MODES = [
     ("click", "Click"),
@@ -89,6 +90,9 @@ form { margin: 0; }
 .text { width: 320px; }
 .msg { color: #9c9; font-size: 14px; }
 .err { color: #f88; }
+.audiobar { height: 40px; font-size: 14px; }
+.audiobar a { color: #9cf; }
+.ctl { width: 100%; height: 650px; height: calc(100vh - 52px); border: 0; }
 """
 
 
@@ -125,7 +129,7 @@ def register_tv(app, limiter, api_key):
         params = {"w": w, "mode": mode}
         if msg:
             params["msg"] = msg
-        return "/tv?" + urlencode(params)
+        return "/tv/control?" + urlencode(params)
 
     def grab_screen():
         """Return a PIL image of the screen, cached briefly so viewers share captures."""
@@ -178,6 +182,23 @@ def register_tv(app, limiter, api_key):
             )
             return html_page(body)
 
+        # Wrapper: the audio player lives here and never reloads; the screen and
+        # controls live in an iframe, so clicks only reload the frame.
+        body = (
+            '<div class="audiobar">Sound: '
+            '<audio id="audio" src="/tv/audio.mp3" controls autoplay preload="none"></audio> '
+            '<a href="/tv/audio.mp3" target="_blank">(open audio stream)</a>'
+            "</div>"
+            f'<iframe class="ctl" src="{escape(page_url(get_width(), get_mode()))}" '
+            'frameborder="0" scrolling="auto"></iframe>'
+        )
+        return html_page(body)
+
+    @limiter.exempt
+    def tv_control():
+        if not authed():
+            return html_page('<a href="/tv" target="_top">Log in</a>')
+
         w = get_width()
         mode = get_mode()
         msg = request.args.get("msg", "")
@@ -218,7 +239,7 @@ def register_tv(app, limiter, api_key):
             '<input type="submit" name="send" value="Type"> '
             '<input type="submit" name="send" value="Type+Enter">'
             "</div></form>"
-            f'<div class="bar">Size: {sizes} &nbsp; <a href="/tv/logout">Log out</a></div>'
+            f'<div class="bar">Size: {sizes} &nbsp; <a href="/tv/logout" target="_top">Log out</a></div>'
             + (f'<div class="msg">{escape(msg)}</div>' if msg else "")
             + '<script type="text/javascript" src="/tv/tv.js"></script>'
         )
@@ -326,6 +347,33 @@ def register_tv(app, limiter, api_key):
         return redirect(page_url(w, mode, msg), code=302)
 
     @limiter.exempt
+    def tv_audio():
+        if not authed():
+            return Response("Unauthorized", status=403)
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-fflags", "nobuffer", "-f", "pulse", "-fragment_size", "2048",
+            "-i", AUDIO_SOURCE, "-ac", "2", "-ar", "44100",
+            "-c:a", "libmp3lame", "-b:a", "128k", "-flush_packets", "1", "-f", "mp3", "-",
+        ]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+        def generate():
+            try:
+                while True:
+                    chunk = proc.stdout.read(4096)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                proc.kill()
+                proc.wait()
+
+        resp = Response(generate(), mimetype="audio/mpeg", direct_passthrough=True)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    @limiter.exempt
     def tv_js():
         resp = Response(JS, mimetype="text/javascript")
         resp.headers["Cache-Control"] = "max-age=3600"
@@ -338,6 +386,8 @@ def register_tv(app, limiter, api_key):
         return resp
 
     app.add_url_rule("/tv", "tv_page", tv_page, methods=["GET"])
+    app.add_url_rule("/tv/control", "tv_control", tv_control, methods=["GET"])
+    app.add_url_rule("/tv/audio.mp3", "tv_audio", tv_audio, methods=["GET"])
     app.add_url_rule("/tv/login", "tv_login", tv_login, methods=["POST"])
     app.add_url_rule("/tv/logout", "tv_logout", tv_logout, methods=["GET"])
     app.add_url_rule("/tv/frame.jpg", "tv_frame", tv_frame, methods=["GET"])

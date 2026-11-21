@@ -103,7 +103,10 @@ def require_api_key(f):
 def add_security_headers(response):
     """Add security headers to all responses"""
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    # TV mode embeds its control page in an iframe on the same origin
+    response.headers["X-Frame-Options"] = (
+        "SAMEORIGIN" if request.path.startswith("/tv") else "DENY"
+    )
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Content-Security-Policy"] = "default-src 'self'"

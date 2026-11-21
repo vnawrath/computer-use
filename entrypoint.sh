@@ -16,6 +16,17 @@ for i in {1..20}; do
   sleep 0.2
 done
 
+echo "[entrypoint] Starting PulseAudio (virtual sink 'tv')"
+export XDG_RUNTIME_DIR="/tmp/runtime-${USER:-appuser}"
+mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+pulseaudio -D --exit-idle-time=-1 --disallow-exit -n \
+  --load="module-native-protocol-unix" \
+  --load="module-null-sink sink_name=tv sink_properties=device.description=TV" \
+  --load="module-always-sink" \
+  || echo "[entrypoint] WARNING: PulseAudio failed to start (no sound)"
+for i in {1..20}; do pactl info >/dev/null 2>&1 && break; sleep 0.2; done
+pactl set-default-sink tv >/dev/null 2>&1 || true
+
 echo "[entrypoint] Starting openbox"
 openbox-session >/dev/null 2>&1 &
 WM_PID=$!
