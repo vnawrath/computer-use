@@ -35,6 +35,8 @@ DEFAULT_WIDTH = 960
 REFRESH_MS = int(os.environ.get("TV_REFRESH_MS", "1500"))
 JPEG_QUALITY = int(os.environ.get("TV_JPEG_QUALITY", "60"))
 FRAME_CACHE_SECONDS = 0.4
+LIVE_FPS = int(os.environ.get("TV_LIVE_FPS", "15"))
+LIVE_BITRATE = os.environ.get("TV_LIVE_BITRATE", "2500k")
 AUDIO_SOURCE = os.environ.get("TV_AUDIO_SOURCE", "tv.monitor")
 
 MODES = [
@@ -80,6 +82,33 @@ JS = """(function () {
 })();
 """
 
+LIVE_JS = """(function () {
+  var v = document.getElementById('live');
+  if (!v) { return; }
+  var timer = null;
+  function reconnect() {
+    if (timer) { return; }
+    timer = setTimeout(function () {
+      timer = null;
+      v.src = '/tv/live.mp4?t=' + (new Date()).getTime();
+      try { v.play(); } catch (e) {}
+    }, 2000);
+  }
+  v.addEventListener('error', reconnect, false);
+  v.addEventListener('ended', reconnect, false);
+  v.addEventListener('stalled', reconnect, false);
+  // If playback falls far behind live, jump back to the live edge.
+  setInterval(function () {
+    try {
+      var b = v.buffered;
+      if (b.length && b.end(b.length - 1) - v.currentTime > 4) {
+        v.currentTime = b.end(b.length - 1) - 0.5;
+      }
+    } catch (e) {}
+  }, 3000);
+})();
+"""
+
 CSS = """body { background: #111; color: #eee; font-family: sans-serif; margin: 4px; }
 form { margin: 0; }
 .screen { display: block; border: 0; margin: 0 0 4px 0; }
@@ -90,6 +119,8 @@ form { margin: 0; }
 .text { width: 320px; }
 .msg { color: #9c9; font-size: 14px; }
 .err { color: #f88; }
+body.livebody { margin: 0; background: #000; overflow: hidden; }
+.live { display: block; width: 100%; height: 100%; height: 100vh; background: #000; object-fit: contain; }
 .audiobar { height: 40px; font-size: 14px; }
 .audiobar a { color: #9cf; }
 .ctl { width: 100%; height: 650px; height: calc(100vh - 52px); border: 0; }
@@ -150,7 +181,7 @@ def register_tv(app, limiter, api_key):
 
         return pyautogui.size()
 
-    def html_page(body, refresh_fallback=False):
+    def html_page(body, refresh_fallback=False, body_class=""):
         head_extra = ""
         if refresh_fallback:
             # Browsers without JS reload the whole page instead.
@@ -160,7 +191,7 @@ def register_tv(app, limiter, api_key):
             '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
             "<title>TV desktop</title>"
             '<link rel="stylesheet" href="/tv/tv.css">'
-            f"{head_extra}</head><body>{body}</body></html>"
+            f'{head_extra}</head><body class="{body_class}">{body}</body></html>'
         )
         resp = make_response(html)
         resp.headers["Content-Type"] = "text/html; charset=utf-8"
@@ -182,17 +213,12 @@ def register_tv(app, limiter, api_key):
             )
             return html_page(body)
 
-        # Wrapper: the audio player lives here and never reloads; the screen and
-        # controls live in an iframe, so clicks only reload the frame.
+        # Live view: one H.264 + AAC stream in a plain <video>. Control happens via the API.
         body = (
-            '<div class="audiobar">Sound: '
-            '<audio id="audio" src="/tv/audio.mp3" controls autoplay preload="none"></audio> '
-            '<a href="/tv/audio.mp3" target="_blank">(open audio stream)</a>'
-            "</div>"
-            f'<iframe class="ctl" src="{escape(page_url(get_width(), get_mode()))}" '
-            'frameborder="0" scrolling="auto"></iframe>'
+            '<video id="live" class="live" src="/tv/live.mp4" autoplay controls playsinline></video>'
+            '<script type="text/javascript" src="/tv/live.js"></script>'
         )
-        return html_page(body)
+        return html_page(body, body_class="livebody")
 
     @limiter.exempt
     def tv_control():
@@ -374,6 +400,49 @@ def register_tv(app, limiter, api_key):
         return resp
 
     @limiter.exempt
+    def tv_live():
+        if not authed():
+            return Response("Unauthorized", status=403)
+        try:
+            sw, sh = screen_size()
+        except Exception:
+            sw, sh = 1280, 800
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-thread_queue_size", "512", "-f", "x11grab", "-framerate", str(LIVE_FPS),
+            "-video_size", f"{sw}x{sh}", "-draw_mouse", "1", "-i", os.environ.get("DISPLAY", ":0"),
+            "-thread_queue_size", "512", "-f", "pulse", "-i", AUDIO_SOURCE,
+            "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
+            "-profile:v", "baseline", "-pix_fmt", "yuv420p",
+            "-g", str(LIVE_FPS * 2), "-b:v", LIVE_BITRATE, "-maxrate", LIVE_BITRATE, "-bufsize", LIVE_BITRATE,
+            "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+            "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+            "-frag_duration", "500000", "-",
+        ]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+        def generate():
+            try:
+                while True:
+                    chunk = proc.stdout.read(16384)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                proc.kill()
+                proc.wait()
+
+        resp = Response(generate(), mimetype="video/mp4", direct_passthrough=True)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    @limiter.exempt
+    def tv_live_js():
+        resp = Response(LIVE_JS, mimetype="text/javascript")
+        resp.headers["Cache-Control"] = "max-age=60"
+        return resp
+
+    @limiter.exempt
     def tv_js():
         resp = Response(JS, mimetype="text/javascript")
         resp.headers["Cache-Control"] = "max-age=3600"
@@ -387,6 +456,8 @@ def register_tv(app, limiter, api_key):
 
     app.add_url_rule("/tv", "tv_page", tv_page, methods=["GET"])
     app.add_url_rule("/tv/control", "tv_control", tv_control, methods=["GET"])
+    app.add_url_rule("/tv/live.mp4", "tv_live", tv_live, methods=["GET"])
+    app.add_url_rule("/tv/live.js", "tv_live_js", tv_live_js, methods=["GET"])
     app.add_url_rule("/tv/audio.mp3", "tv_audio", tv_audio, methods=["GET"])
     app.add_url_rule("/tv/login", "tv_login", tv_login, methods=["POST"])
     app.add_url_rule("/tv/logout", "tv_logout", tv_logout, methods=["GET"])
